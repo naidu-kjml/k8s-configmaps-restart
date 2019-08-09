@@ -1,8 +1,18 @@
 # -*- coding: utf-8 -*-
 import os
+import sys
 import  datetime
 from kubernetes import client, watch ,config
 from kubernetes.client.rest import ApiException
+import logging
+logger = logging.getLogger('configmasps')
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler(sys.stdout)
+#handler.setLevel(logging.INFO)
+#handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(message)s")
+logger.addHandler(handler)
+
+
 config_file = 'D:\work\config'
 
 class K8S(object):
@@ -32,7 +42,7 @@ class K8S(object):
             lable_value = lables.get(self.select_lable,'')
         else:
             lable_value = ""
-        print "%s selecter_lable: %s=%s" % (datetime.datetime.now(),self.select_lable,lable_value)
+        logger.info("%s selecter_lable: %s=%s" % (datetime.datetime.now(),self.select_lable,lable_value))
         return  lable_value
 
     def _get_deployment_name(self,lable):
@@ -52,9 +62,9 @@ class K8S(object):
         cli = client.ExtensionsV1beta1Api()
         try:
             response = cli.patch_namespaced_deployment(name,namespace=self.get_namespaces(),body=body)
-            print "%s patch_deployment %s" % (datetime.datetime.now(),name)
+            logger.info("%s patch_deployment %s" % (datetime.datetime.now(),name))
         except ApiException  as e:
-            print("Exception when calling ExtensionsV1beta1Api->patch_namespaced_deployment: %s\n" % e)
+            logger.error("Exception when calling ExtensionsV1beta1Api->patch_namespaced_deployment: %s\n" % e)
     def watch_config_maps(self):
         v1 = client.CoreV1Api()
         w = watch.Watch()
@@ -63,7 +73,7 @@ class K8S(object):
         for event in stream:
             eventType = event.get('type')
             configmapsObject = event.get('object')
-            print "%s configMaps %s %s" % (datetime.datetime.now(), configmapsObject.metadata.name,eventType)
+            logger.info("%s configMaps %s %s" % (datetime.datetime.now(), configmapsObject.metadata.name,eventType))
             if eventType == "MODIFIED":
                 lables = configmapsObject.metadata.labels
                 lable_value = self._get_lable_value(lables)
@@ -73,16 +83,17 @@ class K8S(object):
                         self._patch_deployment(deployment)
 
     def run(self):
+        logger.info("configmaps watch .....")
         while True:
             try:
                 self.watch_config_maps()
             except ApiException as e:
                 if e.status != 500:
-                    print("ApiException when calling kubernetes: %s\n" % e)
+                    logger.error("ApiException when calling kubernetes: %s\n" % e)
                 else:
                     raise
             except Exception as e:
-                print("Received unknown exception: %s\n" % e)
+                logger.error("Received unknown exception: %s\n" % e)
 
 if __name__ == "__main__":
     k8s = K8S(config_file=config_file)
